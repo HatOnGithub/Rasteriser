@@ -22,6 +22,9 @@ namespace Template
         public int uniform_camPos;
         public int uniform_lightPos;
         public int uniform_lightColor;
+        public int uniform_lightDirection;
+        public int uniform_lightConeAngle;
+        public int uniform_material;
 
         // constructor
         public Shader(string vertexShader, string fragmentShader)
@@ -50,6 +53,9 @@ namespace Template
             uniform_camPos = GL.GetUniformLocation(programID, "camPos");
             uniform_lightPos = GL.GetUniformLocation(programID, "lightPos");
             uniform_lightColor = GL.GetUniformLocation(programID, "lightColor");
+            uniform_lightDirection = GL.GetUniformLocation(programID, "lightDirection");
+            uniform_lightConeAngle = GL.GetUniformLocation(programID, "lightConeAngle");
+            uniform_material = GL.GetUniformLocation(programID, "material");
         }
 
         // loading shaders

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
@@ -18,7 +19,7 @@ namespace Template
         ScreenQuad? quad;                       // screen filling quad for post processing
         readonly bool useRenderTarget = true;   // required for post processing
 
-        public static Camera cam = new Camera();
+        public static Camera cam;
 
         public SceneGraph SceneGraph = new SceneGraph();
 
@@ -27,19 +28,24 @@ namespace Template
         public float rollSpeed = 5;
         public float fovChangeSpeed = 5;
 
+        public Light l1 = new(new Vector3(40, 30, 0), Vector3.One * 255, 3, Vector3.Zero, 10);
+        public Light l2 = new(new Vector3(40, 30, 0), Vector3.One * 255, 3, Vector3.Zero, 10);
+        public Light l3 = new(new Vector3(40, 30, 0), Vector3.One * 255, 3, Vector3.Zero, 10);
+        public Light l4 = new(new Vector3(40, 30, 0), Vector3.One * 255, 3, Vector3.Zero, 10);
 
         // constructor
         public MyApplication(Surface screen)
         {
             this.screen = screen;
+            cam = new Camera(ref screen);
         }
         // initialize
         public void Init()
         {
             // load assets
-            teapot = new Node(new Mesh("../../../assets/teapot.obj", new Vector3(10, 0, 0), null, null, 0.9f, 0.1f, 100), "../../../assets/wood.jpg");
+            teapot = new Node(new Mesh("../../../assets/teapot.obj", new Vector3(15, 10, 0), null, null, 0.9f, 0.6f, 200, Material.DiffuseMirror), "../../../assets/wood.jpg");
             floor =  new Node(new Mesh("../../../assets/floor.obj", null, null, null, 0.9f, 0.1f, 100), "../../../assets/wood.jpg");
-            prideOfHiigara = new Node(new Mesh("../../../assets/poh.obj", new Vector3(0, 5, 0), null, new Vector3(0.01f, 0.01f, 0.01f), 0.9f, 0.1f, 100), "../../../assets/wood.jpg");
+            prideOfHiigara = new Node(new Mesh("../../../assets/poh.obj", new Vector3(0, 5, 0), null, new Vector3(0.01f, 0.01f, 0.01f), 1f, 1f, 100, Material.Mirror), Color.Gray);
 
             // initialize stopwatch
             timer.Reset();
@@ -51,19 +57,57 @@ namespace Template
             if (useRenderTarget) target = new RenderTarget(screen.width, screen.height);
             quad = new ScreenQuad();
 
-            SceneGraph.AddLight(new Vector3(0, 30, 0), Vector3.One * 255, 10);
-            SceneGraph.AddChild(floor);
+            SceneGraph.AddLight(l1);
+            SceneGraph.AddLight(l2);
+            SceneGraph.AddLight(l3);
+            SceneGraph.AddLight(l4);
+
             SceneGraph.AddChild(teapot);
-            floor.AddChild(prideOfHiigara);
+
+            for (int i = 1; i <= 400; i++)
+            {
+                Node torpedo = new Node(new Mesh("../../../assets/torpedoFrigate.obj", new Vector3(400 * i, 0, 0), null, Vector3.One * 2, 0.9f, default, 100, Material.Glossy), "../../../assets/wood.jpg");
+                prideOfHiigara.AddChild(torpedo);
+            }
+
+            for (int i = 1; i <= 400; i++)
+            {
+                Node ion = new Node(new Mesh("../../../assets/ionFrigate.obj", new Vector3(400 * i, 250, 0), null, Vector3.One * 2, 0.9f, default, 100, Material.Glossy), "../../../assets/wood.jpg");
+                prideOfHiigara.AddChild(ion);
+            }
+
+            for (int i = 1; i <= 220; i++)
+            {
+                Node interceptor = new Node(new Mesh("../../../assets/interceptor.obj", new Vector3(-500  + (- 300 * (i % 5)), 0, 200 * (i / 5)), null, Vector3.One * 5, default, 0.5f, 100, Material.DiffuseMirror), Color.DarkGray);
+                prideOfHiigara.AddChild(interceptor);
+            }
+
+            for (int i = 1; i <= 120; i++)
+            {
+                Node pulsargunship = new Node(new Mesh("../../../assets/pulsarGunship.obj", new Vector3(- 500 + (-500 * (i % 5)), 0, -200 + (-300 * (i / 5))), null, Vector3.One * 4, default, 0.5f, 100, Material.DiffuseMirror), Color.DarkGray);
+                prideOfHiigara.AddChild(pulsargunship);
+            }
+
+            SceneGraph.AddChild(prideOfHiigara);
+
+            
         }
 
         // tick for background surface
         public void Tick(FrameEventArgs e, KeyboardState keyboard)
         {
+            float dt = (float)e.Time;
             screen.Clear(0);
             screen.Print("hello world", 2, 2, 0xffff00);
 
             HandleInput(e, keyboard);
+
+            l1.Mesh.Pos *= Matrix3.CreateRotationY(MathHelper.DegreesToRadians(10) * dt);
+            l2.Mesh.Pos *= Matrix3.CreateRotationY(MathHelper.DegreesToRadians(20) * dt);
+            l3.Mesh.Pos *= Matrix3.CreateRotationY(MathHelper.DegreesToRadians(30) * dt);
+            l4.Mesh.Pos *= Matrix3.CreateRotationY(MathHelper.DegreesToRadians(40) * dt);
+
+            prideOfHiigara.Mesh.Rot.Y += MathHelper.DegreesToRadians(20) * dt;
         }
 
         public void HandleInput(FrameEventArgs e, KeyboardState keyboard)
@@ -107,7 +151,9 @@ namespace Template
 
             Matrix4 worldToCamera = cam.WorldToCamera;
 
-            Matrix4 cameraToScreen = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(60.0f), (float)screen.width/screen.height, .1f, 1000);
+            float vFov = (screen.height * 0.5f) / (screen.width * 0.5f / MathF.Tan(0.5f * MathHelper.DegreesToRadians(cam.FOV)));
+
+            Matrix4 cameraToScreen = Matrix4.CreatePerspectiveFieldOfView( vFov, (float)screen.width/screen.height, .1f, 1000);
 
             if (useRenderTarget && target != null && quad != null)
             {

@@ -10,6 +10,8 @@ namespace Template
     public class SceneGraph : Node
     {
         public Vector3 AmbientLight = new Vector3(0.1f, 0.1f, 0.1f);
+        public Texture bg = new Texture("../../../assets/hiigara.jpg");
+        public static int nrOfObjectsRendered = 0;
 
         public SceneGraph() : 
             base( null, "")
@@ -17,25 +19,20 @@ namespace Template
 
         }
 
-        public void AddLight(Vector3 position, Vector3 color, float intensity)
+        public void AddLight(Light light)
         {
-            Light light = new Light(position, color, intensity);
             Children.Add(light);
         }
 
         public void Render(Shader shader, Matrix4 WorldToCamera, Matrix4 CameraToScreen, Vector3 camPos)
         {
             Light[] lights = GetLights(this).ToArray();
-            Vector3[] lightpos = new Vector3[lights.Length];
-            Vector3[] colors = new Vector3[lights.Length];
 
-            for (int i = 0; i < lights.Length; i++)
-            {
-                lightpos[i] = lights[i].Mesh.Pos;
-                colors[i] = lights[i].color * lights[i].intensity;
-            }
+            nrOfObjectsRendered = 0;
 
-            foreach (var child in Children) child.Render(shader, Matrix4.Identity, WorldToCamera, CameraToScreen, AmbientLight ,lightpos, colors, camPos);
+            foreach (var child in Children) child.Render(shader, Matrix4.Identity, WorldToCamera, CameraToScreen, AmbientLight , lights, camPos, bg);
+
+            Console.WriteLine("Objects Rendered = " + nrOfObjectsRendered);
         }
 
         public List<Light> GetLights(Node node)

@@ -10,6 +10,9 @@ namespace Template
 {
     // Mesh and MeshLoader based on work by JTalton; https://web.archive.org/web/20160123042419/www.opentk.com/node/642
     // Only triangles and quads with vertex positions, normals, and texture coordinates are supported
+
+    public enum Material { Glossy, Mirror, DiffuseMirror }
+
     public class Mesh
     {
         // data members
@@ -21,11 +24,13 @@ namespace Template
         int triangleBufferId;                   // element buffer object (EBO) for triangle vertex indices
         int quadBufferId;                       // element buffer object (EBO) for quad vertex indices (not in Modern OpenGL)
 
+
         // model matrix
 
         public Vector3 Pos = Vector3.Zero;
         public Vector3 Rot = Vector3.Zero;
         public Vector3 Scale = Vector3.One;
+        public Material mat;
 
         public Matrix4 localTransform => Matrix4.CreateScale(Scale) * Matrix4.CreateRotationX(Rot.Z) * Matrix4.CreateRotationY(Rot.Y) * Matrix4.CreateRotationZ(Rot.X) * Matrix4.CreateTranslation(Pos);
 
@@ -37,22 +42,46 @@ namespace Template
         float difReflectiveness, reflectiveness, n;
         Vector3 specularColor = Vector3.One * 255;
 
+        public Sphere boundingSphere;
+
 
         // constructor
-        public Mesh(string filename, Vector3? pos, Vector3? rot, Vector3? scale, float difReflectiveness = 0.9f, float reflectiveness = 0.5f, float n = 10)
+        public Mesh(string filename, Vector3? pos, Vector3? rot, Vector3? scale, float difReflectiveness = 0.9f, float reflectiveness = 0.5f, float n = 10, Material mat = Material.Glossy)
         {
             this.filename = filename;
             MeshLoader loader = new();
             loader.Load(this, filename);
 
+            Vector3 Max = new();
+            Vector3 Min = new();
+            if (vertices != null)
+                foreach (var vertexdata in vertices)
+                {
+                    Vector3 vertex = vertexdata.Vertex;
+                    Max.X = MathF.Max(Max.X, vertex.X);
+                    Max.Y = MathF.Max(Max.X, vertex.Y);
+                    Max.Z = MathF.Max(Max.X, vertex.Z);
+
+                    Min.X = MathF.Min(Min.X, vertex.X);
+                    Min.Y = MathF.Min(Min.X, vertex.Y);
+                    Min.Z = MathF.Min(Min.X, vertex.Z);
+                }
+
+            Vector3 Center = (Min + Max) / 2;
+
+            float radius = (Max - Center).Length;
+
+            boundingSphere = new Sphere(Center, radius);
+
+
             if (pos != null) Pos = (Vector3)pos;
             if (rot != null) Rot = (Vector3)rot;
-            if (scale!= null) Scale = (Vector3)scale;
+            if (scale != null) Scale = (Vector3)scale;
 
-            this.difReflectiveness= difReflectiveness;
-            this.reflectiveness= reflectiveness;
+            this.difReflectiveness = difReflectiveness;
+            this.reflectiveness = reflectiveness;
             this.n = n;
-            
+            this.mat = mat;
         }
 
         // initialization; called during first render
@@ -76,8 +105,21 @@ namespace Template
         }
 
         // render the mesh using the supplied shader and matrix
-        public void Render(Shader shader, Matrix4 objectToScreen, Matrix4 objectToWorld, Texture texture, Vector3 AmbientLight, Vector3[] lightpos, Vector3[] colors, Vector3 camPos)
+        public void Render(Shader shader, Matrix4 objectToScreen, Matrix4 objectToWorld, Texture texture, Vector3 AmbientLight, Light[] lights, Vector3 camPos, Texture environmentMap)
         {
+            Vector3[] lightpos = new Vector3[lights.Length];
+            Vector3[] colors = new Vector3[lights.Length];
+            Vector3[] lightDir = new Vector3[lights.Length];
+            float[] coneAngle = new float[lights.Length];
+
+            for (int i = 0; i < lights.Length; i++)
+            {
+                lightpos[i] = lights[i].Mesh.Pos;
+                colors[i] = lights[i].color * lights[i].intensity;
+                lightDir[i] = lights[i].direction;
+                coneAngle[i] = lights[i].coneAngle;
+            }
+
             // on first run, prepare buffers
             Prepare();
 
@@ -91,6 +133,12 @@ namespace Template
             GL.ActiveTexture(TextureUnit.Texture0 + textureUnit);                               // make that the active texture unit
             GL.BindTexture(TextureTarget.Texture2D, texture.id);                                // bind the texture as a 2D image texture to the active texture unit
 
+            // enable texture
+            int envtextureLocation = GL.GetUniformLocation(shader.programID, "environmentTexture");    // get the location of the shader variable
+            GL.Uniform1(envtextureLocation, 1);                                          // set the value of the shader variable to that texture unit
+            GL.ActiveTexture(TextureUnit.Texture0 + 1);                               // make that the active texture unit
+            GL.BindTexture(TextureTarget.Texture2D, environmentMap.id);                                // bind the texture as a 2D image texture to the active texture unit
+
             // pass transforms to vertex shader
             GL.UniformMatrix4(shader.uniform_objectToScreen, false, ref objectToScreen);
             GL.UniformMatrix4(shader.uniform_objectToWorld, false, ref objectToWorld);
@@ -99,6 +147,8 @@ namespace Template
             {
                 GL.Uniform3(GL.GetUniformLocation(shader.programID, "lightPos[" + i + "]"), ref lightpos[i]);
                 GL.Uniform3(GL.GetUniformLocation(shader.programID, "lightColor[" + i + "]"), ref colors[i]);
+                GL.Uniform3(GL.GetUniformLocation(shader.programID, "lightDirection[" + i + "]"), ref lightDir[i]);
+                GL.Uniform1(GL.GetUniformLocation(shader.programID, "lightConeAngle[" + i + "]"), coneAngle[i]);
             }
 
             GL.Uniform1(shader.uniform_n, n);
@@ -107,6 +157,7 @@ namespace Template
             GL.Uniform3(shader.uniform_specularColor, ref specularColor);
             GL.Uniform3(shader.uniform_ambientLight, ref AmbientLight);
             GL.Uniform3(shader.uniform_camPos, ref camPos);
+            GL.Uniform1(shader.uniform_material, (int)mat);
 
             // enable position, normal and uv attribute arrays corresponding to the shader "in" variables
             GL.EnableVertexAttribArray(shader.in_vertexPositionObject);
